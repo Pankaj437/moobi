@@ -28,7 +28,7 @@ jobs:
     - name: Install dependencies
       run: |
         pip install playwright
-        playwright install --with-deps firefox
+        playwright install --with-deps chromium
 
     - name: Run NSE Fetcher
       run: python mobil_tric.py
