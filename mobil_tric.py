@@ -9,8 +9,8 @@ def run(playwright: Playwright) -> None:
     # Login process
     page.goto("https://mobile-tracker-free.com/")
     page.get_by_role("link", name=" Login").click()
-    page.get_by_role("textbox", name="Email").fill("enormouspan@gmail.com")
-    page.get_by_role("textbox", name="Password").fill("pankaj437")
+    page.get_by_role("textbox", name="Email").fill("goxafo5226@buides.com")
+    page.get_by_role("textbox", name="Password").fill("sharma8092")
     time.sleep(2)
     page.get_by_role("button", name="Sign in ").click()
     page.wait_for_timeout(3000)
