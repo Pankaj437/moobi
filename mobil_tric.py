@@ -31,42 +31,39 @@ async def fetch_press_release_data(page, from_date, to_date):
         # Structure the JSON data
         structured_data = {}
         for entry in response:
-            # Assuming each entry has a 'date' field; adjust based on actual API response
             date = entry.get("date", "Unknown Date")
-            # Simplify the date to DD-MM-YYYY if it includes time
             try:
                 date = datetime.strptime(date, "%d-%b-%Y %H:%M:%S").strftime("%d-%m-%Y")
             except (ValueError, TypeError):
                 try:
                     date = datetime.strptime(date, "%d-%b-%Y").strftime("%d-%m-%Y")
                 except (ValueError, TypeError):
-                    pass  # Keep the original date if parsing fails
+                    pass
 
             if date not in structured_data:
                 structured_data[date] = []
             
-            # Extract relevant fields (adjust based on actual API response structure)
             press_release = {
                 "title": entry.get("title", "N/A"),
                 "description": entry.get("description", "N/A"),
                 "category": entry.get("category", "N/A"),
                 "link": entry.get("link", "N/A"),
-                "time": entry.get("time", "N/A")  # If time is separate in the response
+                "time": entry.get("time", "N/A")
             }
             structured_data[date].append(press_release)
 
-        # Sort entries by date and within each date by title
         structured_data = dict(sorted(structured_data.items()))
         for date in structured_data:
             structured_data[date] = sorted(structured_data[date], key=lambda x: x["title"])
 
-        # Save the structured data to a JSON file
         file_name = f"press_release_{to_date}.json"
         with open(file_name, "w", encoding="utf-8") as f:
             json.dump(structured_data, f, indent=4)
         print(f"✅ Structured press release data saved to {file_name}")
+        return file_name
     except Exception as e:
         print(f"❌ Error fetching press release data: {str(e)}")
+        return None
 
 async def take_screenshot_and_fetch_data():
     # Calculate dates dynamically: today and one day ago
@@ -76,16 +73,12 @@ async def take_screenshot_and_fetch_data():
     to_date = today.strftime("%d-%m-%Y")
 
     async with async_playwright() as p:
-        # Launch the browser (headless=False to see the browser in action)
         browser = await p.firefox.launch(headless=True)
-        
-        # Create a new context with a user agent to mimic a real browser
         context = await browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
         )
         page = await context.new_page()
 
-        # Navigate to the NSE homepage to set cookies
         try:
             await page.goto("https://www.nseindia.com", timeout=30000)
             await page.wait_for_load_state("networkidle")
@@ -93,24 +86,30 @@ async def take_screenshot_and_fetch_data():
             print("⚠️ Homepage load timeout—continuing anyway...")
 
         # Task 1: Take screenshot of IPO data
-        # Navigate to the IPO page
         await page.goto("https://www.nseindia.com/market-data/upcoming-issues-ipo", timeout=60000)
+        await page.wait_for_load_state("networkidle")  # Ensure dynamic content loads
 
-        # Wait for the table to load (adjust selector based on actual table structure)
-        await page.wait_for_selector("table")  # Replace with specific table selector if needed
+        # Try to find the table with a more specific selector
+        try:
+            # Adjust selector based on actual table structure; this is a placeholder
+            table_selector = "table:has(th:text('COMPANY NAME'))"  # Example selector
+            await page.wait_for_selector(table_selector, timeout=60000)
+        except PlaywrightTimeoutError:
+            print("❌ Table not found. Logging page content for debugging...")
+            content = await page.content()
+            with open("page_content.html", "w", encoding="utf-8") as f:
+                f.write(content)
+            print("Page content saved to page_content.html. Please inspect to find the correct table selector.")
+            raise
 
-        # Wait 2 seconds before taking the screenshot
         await asyncio.sleep(2)
-
-        # Take a screenshot of the table
-        table = page.locator("table")  # Adjust selector to match the IPO data table
+        table = page.locator(table_selector)
         await table.screenshot(path="ipo_data_screenshot.png")
         print("✅ Screenshot saved as ipo_data_screenshot.png")
 
         # Task 2: Fetch and structure press release data
-        await fetch_press_release_data(page, from_date, to_date)
+        json_file = await fetch_press_release_data(page, from_date, to_date)
 
-        # Close the browser
         await browser.close()
 
 if __name__ == "__main__":
