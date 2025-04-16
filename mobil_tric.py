@@ -4,7 +4,7 @@ from playwright.async_api import async_playwright, TimeoutError as PlaywrightTim
 async def take_screenshot_of_ipo_data():
     async with async_playwright() as p:
         # Launch the browser (headless=False to see the browser in action)
-        browser = await p.firefox.launch(headless=False)
+        browser = await p.firefox.launch(headless=True)
         
         # Create a new context with a user agent to mimic a real browser
         context = await browser.new_context(
