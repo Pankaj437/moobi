@@ -2,7 +2,7 @@ name: Fetch NSE play
 
 on:
   schedule:
-   
+    - cron: "0 */10 * * *"  # Every 5 hours
 
 jobs:
   run-scripts:
