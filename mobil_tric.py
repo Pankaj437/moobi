@@ -55,7 +55,7 @@ async def fetch_press_release_data(page, from_date, to_date):
             }
             structured_data[date].append(press_release)
 
-        # Sort entries by date and within each date by title (or another field)
+        # Sort entries by date and within each date by title
         structured_data = dict(sorted(structured_data.items()))
         for date in structured_data:
             structured_data[date] = sorted(structured_data[date], key=lambda x: x["title"])
@@ -69,15 +69,15 @@ async def fetch_press_release_data(page, from_date, to_date):
         print(f"❌ Error fetching press release data: {str(e)}")
 
 async def take_screenshot_and_fetch_data():
-    # Calculate dates: today and one day ago
-    today = datetime(2025, 4, 16)  # Current date as per your context
+    # Calculate dates dynamically: today and one day ago
+    today = datetime.today()
     one_day_ago = today - timedelta(days=1)
     from_date = one_day_ago.strftime("%d-%m-%Y")
     to_date = today.strftime("%d-%m-%Y")
 
     async with async_playwright() as p:
         # Launch the browser (headless=False to see the browser in action)
-        browser = await p.firefox.launch(headless=True)
+        browser = await p.firefox.launch(headless=False)
         
         # Create a new context with a user agent to mimic a real browser
         context = await browser.new_context(
@@ -93,7 +93,7 @@ async def take_screenshot_and_fetch_data():
             print("⚠️ Homepage load timeout—continuing anyway...")
 
         # Task 1: Take screenshot of IPO data
-        # Navigate to the corrected IPO page
+        # Navigate to the IPO page
         await page.goto("https://www.nseindia.com/market-data/upcoming-issues-ipo", timeout=60000)
 
         # Wait for the table to load (adjust selector based on actual table structure)
