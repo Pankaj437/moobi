@@ -89,10 +89,10 @@ async def take_screenshot_and_fetch_data():
         await page.goto("https://www.nseindia.com/market-data/upcoming-issues-ipo", timeout=60000)
         await page.wait_for_load_state("networkidle")  # Ensure dynamic content loads
 
-        # Try to find the table with a more specific selector
+        # Try to find the table with a generic selector (fallback)
         try:
-            # Adjust selector based on actual table structure; this is a placeholder
-            table_selector = "table:has(th:text('COMPANY NAME'))"  # Example selector
+            # Reverted to generic selector; refine after inspecting page_content.html
+            table_selector = "table"  # TODO: Inspect page_content.html to find a specific selector (e.g., "table#ipoTable" or "table.dataTable")
             await page.wait_for_selector(table_selector, timeout=60000)
         except PlaywrightTimeoutError:
             print("❌ Table not found. Logging page content for debugging...")
