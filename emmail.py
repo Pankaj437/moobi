@@ -22,7 +22,7 @@ date_str = datetime.utcnow().strftime("%Y-%m-%d")
 msg = MIMEMultipart()
 msg['From'] = EMAIL_USER
 msg['To'] = EMAIL_TO
-msg['Subject'] = f"Mobile Tracker Screenshots - {date_str}"
+msg['Subject'] = f"IPO ISSUE - {date_str}"
 
 # Attach all PNG files from current directory
 png_files = [f for f in os.listdir('.') if f.endswith('.png')]
