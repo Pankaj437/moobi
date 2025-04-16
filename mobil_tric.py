@@ -1,60 +1,25 @@
+from playwright.sync_api import sync_playwright
 import time
-from playwright.sync_api import Playwright, sync_playwright
+def take_screenshot_of_ipo_data():
+    # Initialize Playwright
+    with sync_playwright() as p:
+        # Launch the browser (headless=False to see the browser in action)
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
 
-def run(playwright: Playwright) -> None:
-    browser = playwright.chromium.launch(headless=True)
-    context = browser.new_context()
-    page = context.new_page()
+        # Navigate to the NSE IPO page
+        page.goto("https://www.nseindia.com/market-data/all-upcoming-issues-ipo")
 
-    # Login process
-    page.goto("https://mobile-tracker-free.com/")
-    page.get_by_role("link", name=" Login").click()
-    page.get_by_role("textbox", name="Email").fill("goxafo5226@buides.com")
-    page.get_by_role("textbox", name="Password").fill("sharma8092")
-    time.sleep(2)
-    page.get_by_role("button", name="Sign in ").click()
-    page.wait_for_timeout(3000)
+        # Wait for the table to load (adjust selector based on actual table structure)
+        page.wait_for_selector("table")  # Replace with specific table selector if needed
+        time.sleep(2)
+        # Take a screenshot of the table
+        table = page.locator("table")  # Adjust selector to match the IPO data table
+        table.screenshot(path="ipo_data_screenshot.png")
 
-    # Optional: Close ad iframe if exists
-    try:
-        iframe = page.frame(name="aswift_5")
-        if iframe:
-            close_btn = iframe.get_by_role("button", name="Close ad")
-            if close_btn:
-                close_btn.click()
-    except Exception as e:
-        print("Ad close failed or not present:", e)
+        # Close the browser
+        browser.close()
 
-    # List of URLs and filenames for screenshot
-    sections = {
-        "whatsappmessages": "whatsapp_data.png",
-        "snapchatmessages": "snapchat_data.png",
-        "calls": "calls.png",
-        # Add more like:
-        "sms": "sms.png",
-        # "contacts": "contacts.png",
-        "instagrammessages": "instagram.png",
-    }
-
-    for section, filename in sections.items():
-        try:
-            url = f"https://mobile-tracker-free.com/dashboard/{section}.php"
-            print(f"Navigating to: {url}")
-            page.goto(url)
-            page.wait_for_timeout(3000)
-
-            # Try capturing the full page if no table
-            if page.locator("table").is_visible():
-                page.locator("table").screenshot(path=filename)
-            else:
-                page.screenshot(path=filename, full_page=True)
-
-            print(f"Saved screenshot: {filename}")
-        except Exception as e:
-            print(f"Failed to capture {section}: {e}")
-
-    context.close()
-    browser.close()
-
-with sync_playwright() as playwright:
-    run(playwright)
+# Run the function
+if __name__ == "__main__":
+    take_screenshot_of_ipo_data()
