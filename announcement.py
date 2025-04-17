@@ -81,7 +81,7 @@ async def fetch_nse_announcements():
         for attempt in range(3):
             try:
                 # Navigate to NSE announcements page to set cookies
-                await page.goto("https://www.nseindia.com/companies-listing/corporate-filings-announcements", timeout=30000)
+                await page.goto("https://www.nseindia.com", timeout=30000)
                 await page.wait_for_load_state("networkidle", timeout=30000)
                 logger.info("NSE announcements page loaded")
 
