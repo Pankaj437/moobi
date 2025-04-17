@@ -29,7 +29,7 @@ msg['Subject'] = f"IPO Issue and Press Release Data - {date_str}"
 
 # Files to attach
 png_file = "ipo_data_screenshot.png"
-json_file = f"press_release_{to_date}.json"
+json_file = f"press_release_{to_date}.txt"
 files_to_attach = []
 
 # Check and add PNG file
