@@ -3,7 +3,7 @@ import json
 import smtplib
 import os
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -18,13 +18,22 @@ def filter_insider_trading(data):
     """Filter relevant fields from insider trading data."""
     try:
         filtered = []
-        for item in data:
+        for item in data.get('data', []):
             filtered.append({
                 'symbol': item.get('symbol', ''),
-                'companyName': item.get('companyName', ''),
-                'personName': item.get('personName', ''),
-                'transactionType': item.get('transactionType', ''),
-                'shares': item.get('shares', ''),
+                'company': item.get('company', ''),
+                'acquirerName': item.get('acqName', ''),
+                'personCategory': item.get('personCategory', ''),
+                'transactionType': item.get('tdpTransactionType', ''),
+                'securityType': item.get('secType', ''),
+                'securityAcquired': item.get('secAcq', ''),
+                'securityValue': item.get('secVal', ''),
+                'preSharesNo': item.get('befAcqSharesNo', ''),
+                'preSharesPer': item.get('befAcqSharesPer', ''),
+                'postSharesNo': item.get('afterAcqSharesNo', ''),
+                'postSharesPer': item.get('afterAcqSharesPer', ''),
+                'acquisitionMode': item.get('acqMode', ''),
+                'exchange': item.get('exchange', ''),
                 'date': item.get('date', '')
             })
         logger.info(f"Filtered {len(filtered)} insider trading entries.")
@@ -41,10 +50,17 @@ def save_text_summary(data, from_date, to_date, filename):
             f.write("=" * 60 + "\n\n")
             for item in data:
                 f.write(f"Symbol: {item['symbol']}\n")
-                f.write(f"Company: {item['companyName']}\n")
-                f.write(f"Person: {item['personName']}\n")
+                f.write(f"Company: {item['company']}\n")
+                f.write(f"Acquirer Name: {item['acquirerName']}\n")
+                f.write(f"Person Category: {item['personCategory']}\n")
                 f.write(f"Transaction Type: {item['transactionType']}\n")
-                f.write(f"Shares: {item['shares']}\n")
+                f.write(f"Security Type: {item['securityType']}\n")
+                f.write(f"Securities Acquired: {item['securityAcquired']}\n")
+                f.write(f"Security Value: Rs. {item['securityValue']}\n")
+                f.write(f"Pre-Transaction Shares: {item['preSharesNo']} ({item['preSharesPer']}%)\n")
+                f.write(f"Post-Transaction Shares: {item['postSharesNo']} ({item['postSharesPer']}%)\n")
+                f.write(f"Acquisition Mode: {item['acquisitionMode']}\n")
+                f.write(f"Exchange: {item['exchange']}\n")
                 f.write(f"Date: {item['date']}\n")
                 f.write("=" * 60 + "\n\n")
         logger.info(f"Text summary saved as {filename}")
@@ -53,8 +69,7 @@ def save_text_summary(data, from_date, to_date, filename):
 
 async def fetch_insider_trading():
     today = datetime.today()
-    one_day_ago = today - timedelta(days=1)
-    from_date = one_day_ago.strftime("%d-%m-%Y")
+    from_date = today.strftime("%d-%m-%Y")
     to_date = today.strftime("%d-%m-%Y")
     date_str = today.strftime("%Y-%m-%d")
     output_filename = f"insider_trading_{to_date}.json"
@@ -96,7 +111,7 @@ async def fetch_insider_trading():
             logger.warning("Homepage load timeout—continuing anyway...")
 
         api_url = f"https://www.nseindia.com/api/corporates-pit?index=equities&from_date={from_date}&to_date={to_date}"
-        logger.info(f"Fetching insider trading from: {api_url}")
+        logger.info(f"Fetching insider trading data from: {api_url}")
 
         json_data = None
         for attempt in range(3):
@@ -105,7 +120,7 @@ async def fetch_insider_trading():
                 if response and response.ok:
                     try:
                         json_data = await response.json()
-                        logger.info(f"Attempt {attempt + 1}: Successfully fetched JSON data with {len(json_data)} entries.")
+                        logger.info(f"Attempt {attempt + 1}: Successfully fetched JSON data with {len(json_data.get('data', []))} entries.")
                         break
                     except ValueError:
                         logger.error(f"Attempt {attempt + 1}: Failed to parse JSON response.")
@@ -117,7 +132,7 @@ async def fetch_insider_trading():
             except PlaywrightTimeoutError:
                 logger.error(f"Attempt {attempt + 1}: API request timed out.")
             except Exception as e:
-                logger.error(f"Attempt {attempt + 1}: Error fetching insider trading: {e}")
+                logger.error(f"Attempt {attempt + 1}: Error fetching insider trading data: {e}")
             if attempt < 2:
                 logger.info("Retrying after 2 seconds...")
                 await asyncio.sleep(2)
