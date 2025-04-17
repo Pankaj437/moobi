@@ -14,16 +14,15 @@ def clean_html(text):
     try:
         soup = BeautifulSoup(text, 'html.parser')
         cleaned_text = soup.get_text(separator=' ').strip()
-        # Replace multiple spaces/newlines with single space
         cleaned_text = ' '.join(cleaned_text.split())
         logger.info("Successfully cleaned HTML from text.")
         return cleaned_text
     except Exception as e:
         logger.error(f"Failed to clean HTML: {e}")
-        return text  # Return original text as fallback
+        return text
 
 def simplify_press_release(data):
-    """Extract key fields, clean body, and sort by date for simplified JSON."""
+    """Extract key fields, clean body, and sort by date."""
     try:
         simplified = []
         for item in data:
@@ -34,14 +33,15 @@ def simplify_press_release(data):
                 if isinstance(category, list) and category and isinstance(category[0], dict)
                 else content.get('field_type', 'Unknown')
             )
+            attachment_url = content.get('field_file_attachement', {}).get('url', '')
             simplified.append({
                 'title': content.get('title', ''),
                 'date': content.get('field_date', ''),
                 'body': clean_html(content.get('body', '')),
-                'attachment_url': content.get('field_file_attachment', {}).get('url', ''),
+                'attachment_url': attachment_url,
                 'category': category_name
             })
-        # Sort by date (newest first)
+            logger.debug(f"Parsed item: title={content.get('title', '')}, attachment_url={attachment_url}")
         simplified = sorted(simplified, key=lambda x: datetime.strptime(x['date'], '%d-%b-%Y'), reverse=True)
         logger.info(f"Simplified and sorted {len(simplified)} press release entries.")
         return simplified
@@ -50,11 +50,10 @@ def simplify_press_release(data):
         return []
 
 async def download_press_release():
-    # Calculate date range (today and one day ago)
     today = datetime.today()
     one_day_ago = today - timedelta(days=1)
-    from_date = one_day_ago.strftime("%d-%m-%Y")  # e.g., 16-04-2025
-    to_date = today.strftime("%d-%m-%Y")          # e.g., 17-04-2025
+    from_date = one_day_ago.strftime("%d-%m-%Y")
+    to_date = today.strftime("%d-%m-%Y")
     output_filename = f"press_release_{to_date}.json"
     simplified_filename = f"press_release_{to_date}_simplified.json"
     summary_filename = f"press_release_{to_date}_summary.txt"
@@ -62,7 +61,6 @@ async def download_press_release():
     logger.info(f"Starting press release download for {from_date} to {to_date}")
 
     async with async_playwright() as p:
-        # Launch the browser
         try:
             browser = await p.firefox.launch(headless=True)
             logger.info("Browser launched successfully.")
@@ -70,7 +68,6 @@ async def download_press_release():
             logger.error(f"Failed to launch browser: {e}")
             return
 
-        # Create a new context with a user agent and headers
         try:
             context = await browser.new_context(
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
@@ -89,7 +86,6 @@ async def download_press_release():
             await browser.close()
             return
 
-        # Navigate to the NSE homepage to set cookies
         try:
             await page.goto("https://www.nseindia.com", timeout=30000)
             await page.wait_for_load_state("networkidle", timeout=30000)
@@ -97,15 +93,13 @@ async def download_press_release():
         except PlaywrightTimeoutError:
             logger.warning("Homepage load timeout—continuing anyway...")
 
-        # Construct the press release API URL
         api_url = f"https://www.nseindia.com/api/press-release?fromDate={from_date}&toDate={to_date}"
         logger.info(f"Fetching press release data from: {api_url}")
 
-        # Retry API request up to 3 times
         json_data = None
         for attempt in range(3):
             try:
-                response = await page.goto(api_url, timeout=60000)
+                response = await page.goto(api_url, timeout=90000)
                 if response and response.ok:
                     try:
                         json_data = await response.json()
@@ -113,7 +107,6 @@ async def download_press_release():
                         break
                     except ValueError:
                         logger.error(f"Attempt {attempt + 1}: Failed to parse JSON response.")
-                        # Save raw response for debugging
                         with open(f"raw_response_attempt_{attempt + 1}.txt", "w", encoding='utf-8') as f:
                             f.write(await response.text())
                         logger.info(f"Saved raw response as raw_response_attempt_{attempt + 1}.txt")
@@ -128,7 +121,6 @@ async def download_press_release():
                 await asyncio.sleep(2)
 
         if json_data:
-            # Save original JSON
             try:
                 with open(output_filename, 'w', encoding='utf-8') as f:
                     json.dump(json_data, f, indent=4, ensure_ascii=False)
@@ -136,7 +128,6 @@ async def download_press_release():
             except Exception as e:
                 logger.error(f"Failed to save original JSON: {e}")
 
-            # Save simplified JSON
             try:
                 simplified_data = simplify_press_release(json_data)
                 if simplified_data:
@@ -148,7 +139,6 @@ async def download_press_release():
             except Exception as e:
                 logger.error(f"Failed to save simplified JSON: {e}")
 
-            # Generate text summary
             try:
                 with open(summary_filename, 'w', encoding='utf-8') as f:
                     f.write(f"Press Release Summary ({from_date} to {to_date})\n")
@@ -166,7 +156,6 @@ async def download_press_release():
         else:
             logger.error("Failed to fetch valid JSON after all retries.")
 
-        # Close the browser
         try:
             await browser.close()
             logger.info("Browser closed successfully.")
