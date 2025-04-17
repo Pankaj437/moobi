@@ -1,31 +1,29 @@
 import asyncio
 import json
-import re
 import logging
 from datetime import datetime, timedelta
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
+from bs4 import BeautifulSoup
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 def clean_html(text):
-    """Remove HTML tags and clean text using regex."""
+    """Remove HTML tags using BeautifulSoup."""
     try:
-        # Remove HTML tags
-        text = re.sub(r'<[^>]+>', '', text)
-        # Replace multiple whitespace/newlines with single space
-        text = re.sub(r'\s+', ' ', text)
-        # Remove trailing/leading whitespace
-        text = text.strip()
+        soup = BeautifulSoup(text, 'html.parser')
+        cleaned_text = soup.get_text(separator=' ').strip()
+        # Replace multiple spaces/newlines with single space
+        cleaned_text = ' '.join(cleaned_text.split())
         logger.info("Successfully cleaned HTML from text.")
-        return text
+        return cleaned_text
     except Exception as e:
         logger.error(f"Failed to clean HTML: {e}")
         return text  # Return original text as fallback
 
 def simplify_press_release(data):
-    """Extract key fields and clean body for simplified JSON."""
+    """Extract key fields, clean body, and sort by date for simplified JSON."""
     try:
         simplified = []
         for item in data:
@@ -40,10 +38,12 @@ def simplify_press_release(data):
                 'title': content.get('title', ''),
                 'date': content.get('field_date', ''),
                 'body': clean_html(content.get('body', '')),
-                'attachment_url': content.get('field_file_attachement', {}).get('url', ''),
+                'attachment_url': content.get('field_file_attachment', {}).get('url', ''),
                 'category': category_name
             })
-        logger.info(f"Simplified {len(simplified)} press release entries.")
+        # Sort by date (newest first)
+        simplified = sorted(simplified, key=lambda x: datetime.strptime(x['date'], '%d-%b-%Y'), reverse=True)
+        logger.info(f"Simplified and sorted {len(simplified)} press release entries.")
         return simplified
     except Exception as e:
         logger.error(f"Failed to simplify press release data: {e}")
@@ -77,7 +77,10 @@ async def download_press_release():
                 extra_http_headers={
                     "Accept": "application/json",
                     "Referer": "https://www.nseindia.com/"
-                }
+                },
+                viewport={"width": 1920, "height": 1080},
+                ignore_https_errors=True,
+                java_script_enabled=True
             )
             page = await context.new_page()
             logger.info("Browser context and page created.")
@@ -149,14 +152,14 @@ async def download_press_release():
             try:
                 with open(summary_filename, 'w', encoding='utf-8') as f:
                     f.write(f"Press Release Summary ({from_date} to {to_date})\n")
-                    f.write("=" * 50 + "\n\n")
+                    f.write("=" * 60 + "\n\n")
                     for item in simplified_data:
                         f.write(f"Title: {item['title']}\n")
                         f.write(f"Date: {item['date']}\n")
                         f.write(f"Category: {item['category']}\n")
                         f.write(f"Body: {item['body']}\n")
                         f.write(f"Attachment: {item['attachment_url']}\n")
-                        f.write("-" * 50 + "\n\n")
+                        f.write("=" * 60 + "\n\n")
                 logger.info(f"Text summary saved as {summary_filename}")
             except Exception as e:
                 logger.error(f"Failed to save text summary: {e}")
