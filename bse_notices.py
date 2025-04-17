@@ -93,7 +93,7 @@ async def fetch_bse_notices():
             await browser.close()
             return None, None
 
-        url = "https://www.bseindia.com/markets/MarketInfo/NoticesCirculars.aspx?id=2"
+        url = "https://www.bseindia.com/markets/MarketInfo/NoticesCirculars.aspx?id=0"
         for attempt in range(3):
             try:
                 await page.goto(url, timeout=60000)
