@@ -15,19 +15,20 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 def filter_bulk_deals(data):
-    """Filter relevant fields from bulk and block deals data."""
+    """Filter relevant fields from bulk deals data."""
     try:
         filtered = []
-        for item in data:
+        for item in data.get('data', []):
             filtered.append({
-                'symbol': item.get('symbol', ''),
-                'companyName': item.get('companyName', ''),
-                'dealType': item.get('dealType', ''),
-                'quantity': item.get('quantity', ''),
-                'price': item.get('price', ''),
-                'date': item.get('date', '')
+                'symbol': item.get('BD_SYMBOL', ''),
+                'companyName': item.get('BD_SCRIP_NAME', ''),
+                'clientName': item.get('BD_CLIENT_NAME', ''),
+                'buySell': item.get('BD_BUY_SELL', ''),
+                'quantity': item.get('BD_QTY_TRD', ''),
+                'price': item.get('BD_TP_WATP', ''),
+                'date': item.get('mTIMESTAMP', '')
             })
-        logger.info(f"Filtered {len(filtered)} bulk and block deal entries.")
+        logger.info(f"Filtered {len(filtered)} bulk deal entries.")
         return filtered
     except Exception as e:
         logger.error(f"Failed to filter bulk deals data: {e}")
@@ -37,12 +38,13 @@ def save_text_summary(data, from_date, to_date, filename):
     """Save filtered bulk deals data as a human-readable text file."""
     try:
         with open(filename, 'w', encoding='utf-8') as f:
-            f.write(f"Bulk and Block Deals Summary ({from_date} to {to_date})\n")
+            f.write(f"Bulk Deals Summary ({from_date} to {to_date})\n")
             f.write("=" * 60 + "\n\n")
             for item in data:
                 f.write(f"Symbol: {item['symbol']}\n")
                 f.write(f"Company: {item['companyName']}\n")
-                f.write(f"Deal Type: {item['dealType']}\n")
+                f.write(f"Client: {item['clientName']}\n")
+                f.write(f"Transaction Type: {item['buySell']}\n")
                 f.write(f"Quantity: {item['quantity']}\n")
                 f.write(f"Price: Rs. {item['price']}\n")
                 f.write(f"Date: {item['date']}\n")
@@ -95,7 +97,7 @@ async def fetch_bulk_deals():
         except PlaywrightTimeoutError:
             logger.warning("Homepage load timeout—continuing anyway...")
 
-        api_url = f"https://www.nseindia.com/api/bulk-deals?from_date={from_date}&to_date={to_date}"
+        api_url = f"https://www.nseindia.com/api/historical/bulk-deals?from={from_date}&to={to_date}"
         logger.info(f"Fetching bulk deals from: {api_url}")
 
         json_data = None
@@ -105,7 +107,7 @@ async def fetch_bulk_deals():
                 if response and response.ok:
                     try:
                         json_data = await response.json()
-                        logger.info(f"Attempt {attempt + 1}: Successfully fetched JSON data with {len(json_data)} entries.")
+                        logger.info(f"Attempt {attempt + 1}: Successfully fetched JSON data with {len(json_data.get('data', []))} entries.")
                         break
                     except ValueError:
                         logger.error(f"Attempt {attempt + 1}: Failed to parse JSON response.")
@@ -155,11 +157,11 @@ def send_email(summary_filename, date_str):
     msg = MIMEMultipart()
     msg['From'] = EMAIL_USER
     msg['To'] = EMAIL_TO
-    msg['Subject'] = f"Bulk and Block Deals Data - {date_str}"
+    msg['Subject'] = f"Bulk Deals Data - {date_str}"
 
     body = f"""Dear Recipient,
 
-Attached is the bulk and block deals summary for {date_str} (text format).
+Attached is the bulk deals summary for {date_str} (text format).
 Please review the attachment for details.
 
 Best regards,
