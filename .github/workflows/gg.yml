@@ -1,9 +1,10 @@
-name: Fetch NSE play
+name: Fetch NSE Play
 
 on:
   schedule:
-    - cron: "0 */10 * * *"  # Every 5 hours
+    - cron: "0 */5 * * *"  # Every 5 hours
   workflow_dispatch:
+
 jobs:
   run-scripts:
     runs-on: ubuntu-latest
@@ -28,14 +29,43 @@ jobs:
       run: |
         pip install playwright beautifulsoup4
         playwright install --with-deps firefox
-        
-    - name: Run NSE Fetcher
+
+    - name: Run IPO Data Fetcher
       run: python mobil_tric.py
-    - name: Run NSE Fetcher
+      continue-on-error: true
+
+    - name: Run Press Release Fetcher
       run: python press_release.py
-    - name: Run NSE Fetcher
-      run: python financial_sender.py      
-    - name: Run NSE Fetcher
-      run: python event_calendar.py  
-    - name: send email
-      run: python emmail.py
+      continue-on-error: true
+
+    - name: Run Financial Results Fetcher
+      run: python financial_sender.py
+      continue-on-error: true
+
+    - name: Run Event Calendar Fetcher
+      run: python event_calendar.py
+      continue-on-error: true
+
+    - name: Run Bulk Deals Fetcher
+      run: python bulk_deals.py
+      continue-on-error: true
+
+    - name: Run Market Data Fetcher
+      run: python market_data.py
+      continue-on-error: true
+
+    - name: Run BSE Notices Fetcher
+      run: python bse_notices.py
+      continue-on-error: true
+
+    - name: Run Insider Trading Fetcher
+      run: python insider_trading.py
+      continue-on-error: true
+
+    - name: Run Analyst Recommendations Fetcher
+      run: python analyst_recommendations.py
+      continue-on-error: true
+
+    - name: Send Consolidated Email
+      run: python email_sender.py
+      continue-on-error: true
