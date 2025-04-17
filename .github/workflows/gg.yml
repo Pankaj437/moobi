@@ -33,6 +33,8 @@ jobs:
       run: python mobil_tric.py
     - name: Run NSE Fetcher
       run: python press_release.py
+    - name: Run NSE Fetcher
+      run: python financial_sender.py      
 
     - name: send email
       run: python emmail.py
