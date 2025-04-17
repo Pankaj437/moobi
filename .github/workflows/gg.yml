@@ -2,7 +2,7 @@ name: Fetch NSE Play
 
 on:
   schedule:
-    - cron: "0 */5 * * *"  # Every 5 hours
+   - cron: "0 17 * * *" # Every 5 hours
   workflow_dispatch:
 
 jobs:
@@ -52,10 +52,6 @@ jobs:
 
     - name: Run Market Data Fetcher
       run: python short_sell.py
-      continue-on-error: true
-
-    - name: Run BSE Notices Fetcher
-      run: python bse_notices.py
       continue-on-error: true
 
     - name: Run Insider Trading Fetcher
