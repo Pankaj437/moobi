@@ -20,7 +20,7 @@ async def take_screenshot_of_ipo_data():
             print("⚠️ Homepage load timeout—continuing anyway...")
 
         # Navigate to the IPO page using the same context (cookies are retained)
-        await page.goto("https://www.nseindia.com/market-data/upcoming-issues-ipo", timeout=60000)
+        await page.goto("https://www.nseindia.com/market-data/all-upcoming-issues-ipo", timeout=60000)
 
         # Wait for the table to load (adjust selector based on actual table structure)
         await page.wait_for_selector("table")  # Replace with specific table selector if needed
