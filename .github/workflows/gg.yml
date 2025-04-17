@@ -69,3 +69,11 @@ jobs:
     - name: Send Consolidated Email
       run: python emmail.py
       continue-on-error: true
+
+    - name: Send Consolidated Email
+      run: python corporate_action.py
+      continue-on-error: true      
+
+    - name: Send Consolidated Email
+      run: python annnouncement.py
+      continue-on-error: true
