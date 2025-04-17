@@ -113,7 +113,7 @@ async def fetch_bse_notices():
             await browser.close()
             return None, None
 
-        url = "https://www.bseindia.com/markets/MarketInfo/NoticesCirculars.aspx?id=2"
+        url = "https://www.bseindia.com/markets/MarketInfo/NoticesCirculars.aspx?id=0"
         logger.info(f"Fetching BSE notices from: {url}")
 
         # Set form data for single-day query
