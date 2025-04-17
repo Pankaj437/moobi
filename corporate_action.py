@@ -41,7 +41,7 @@ async def fetch_nse_corporate_actions():
     # Set date range (past week to current day)
     today = datetime.today()
     to_date = today.strftime("%d-%m-%Y")
-    from_date = (today - timedelta(days=1)).strftime("%d-%m-%Y")  # Matches 11-04-2025 to 18-04-2025
+    from_date = today.strftime("%d-%m-%Y")  # Matches 11-04-2025 to 18-04-2025
     date_str = today.strftime("%Y-%m-%d")
     output_filename = f"nse_corporate_actions_{to_date}.json"
     summary_filename = f"nse_corporate_actions_{to_date}_summary.txt"
