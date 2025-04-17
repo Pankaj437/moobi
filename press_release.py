@@ -1,48 +1,53 @@
 import asyncio
 import json
 import re
+import logging
 from datetime import datetime, timedelta
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
 
-# Optional: Install html2text for better HTML cleaning
-try:
-    import html2text
-    HTML2TEXT_AVAILABLE = True
-except ImportError:
-    HTML2TEXT_AVAILABLE = False
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 def clean_html(text):
-    """Remove HTML tags and clean text."""
-    if HTML2TEXT_AVAILABLE:
-        h = html2text.HTML2Text()
-        h.ignore_links = True
-        h.ignore_images = True
-        return h.handle(text).strip()
-    else:
-        # Fallback: Use regex to remove HTML tags
+    """Remove HTML tags and clean text using regex."""
+    try:
+        # Remove HTML tags
         text = re.sub(r'<[^>]+>', '', text)
+        # Replace multiple whitespace/newlines with single space
         text = re.sub(r'\s+', ' ', text)
-        return text.strip()
+        # Remove trailing/leading whitespace
+        text = text.strip()
+        logger.info("Successfully cleaned HTML from text.")
+        return text
+    except Exception as e:
+        logger.error(f"Failed to clean HTML: {e}")
+        return text  # Return original text as fallback
 
 def simplify_press_release(data):
     """Extract key fields and clean body for simplified JSON."""
-    simplified = []
-    for item in data:
-        content = item.get('content', {})
-        category = content.get('field_category_press', [])
-        category_name = (
-            category[0]['content']['name']
-            if isinstance(category, list) and category and isinstance(category[0], dict)
-            else content.get('field_type', 'Unknown')
-        )
-        simplified.append({
-            'title': content.get('title', ''),
-            'date': content.get('field_date', ''),
-            'body': clean_html(content.get('body', '')),
-            'attachment_url': content.get('field_file_attachement', {}).get('url', ''),
-            'category': category_name
-        })
-    return simplified
+    try:
+        simplified = []
+        for item in data:
+            content = item.get('content', {})
+            category = content.get('field_category_press', [])
+            category_name = (
+                category[0]['content']['name']
+                if isinstance(category, list) and category and isinstance(category[0], dict)
+                else content.get('field_type', 'Unknown')
+            )
+            simplified.append({
+                'title': content.get('title', ''),
+                'date': content.get('field_date', ''),
+                'body': clean_html(content.get('body', '')),
+                'attachment_url': content.get('field_file_attachement', {}).get('url', ''),
+                'category': category_name
+            })
+        logger.info(f"Simplified {len(simplified)} press release entries.")
+        return simplified
+    except Exception as e:
+        logger.error(f"Failed to simplify press release data: {e}")
+        return []
 
 async def download_press_release():
     # Calculate date range (today and one day ago)
@@ -54,74 +59,116 @@ async def download_press_release():
     simplified_filename = f"press_release_{to_date}_simplified.json"
     summary_filename = f"press_release_{to_date}_summary.txt"
 
+    logger.info(f"Starting press release download for {from_date} to {to_date}")
+
     async with async_playwright() as p:
         # Launch the browser
-        browser = await p.firefox.launch(headless=True)
-        
-        # Create a new context with a user agent
-        context = await browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
-        )
-        page = await context.new_page()
+        try:
+            browser = await p.firefox.launch(headless=True)
+            logger.info("Browser launched successfully.")
+        except Exception as e:
+            logger.error(f"Failed to launch browser: {e}")
+            return
+
+        # Create a new context with a user agent and headers
+        try:
+            context = await browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+                extra_http_headers={
+                    "Accept": "application/json",
+                    "Referer": "https://www.nseindia.com/"
+                }
+            )
+            page = await context.new_page()
+            logger.info("Browser context and page created.")
+        except Exception as e:
+            logger.error(f"Failed to create browser context: {e}")
+            await browser.close()
+            return
 
         # Navigate to the NSE homepage to set cookies
         try:
             await page.goto("https://www.nseindia.com", timeout=30000)
             await page.wait_for_load_state("networkidle", timeout=30000)
-            print("✅ NSE homepage loaded, cookies set.")
+            logger.info("NSE homepage loaded, cookies set.")
         except PlaywrightTimeoutError:
-            print("⚠️ Homepage load timeout—continuing anyway...")
+            logger.warning("Homepage load timeout—continuing anyway...")
 
         # Construct the press release API URL
-        api_url = f"https://www.nseindia.com/api/press-release?csv=true&fromDate={from_date}&toDate={to_date}"
-        print(f"Fetching press release data from: {api_url}")
+        api_url = f"https://www.nseindia.com/api/press-release?fromDate={from_date}&toDate={to_date}"
+        logger.info(f"Fetching press release data from: {api_url}")
 
-        # Make the API request
-        try:
-            response = await page.goto(api_url, timeout=60000)
-            if response and response.ok:
-                # Get the JSON content
-                try:
-                    json_data = await response.json()
-                    # Save original JSON
-                    with open(output_filename, 'w', encoding='utf-8') as f:
-                        json.dump(json_data, f, indent=4, ensure_ascii=False)
-                    print(f"✅ Original press release JSON saved as {output_filename}")
+        # Retry API request up to 3 times
+        json_data = None
+        for attempt in range(3):
+            try:
+                response = await page.goto(api_url, timeout=60000)
+                if response and response.ok:
+                    try:
+                        json_data = await response.json()
+                        logger.info(f"Attempt {attempt + 1}: Successfully fetched JSON data with {len(json_data)} entries.")
+                        break
+                    except ValueError:
+                        logger.error(f"Attempt {attempt + 1}: Failed to parse JSON response.")
+                        # Save raw response for debugging
+                        with open(f"raw_response_attempt_{attempt + 1}.txt", "w", encoding='utf-8') as f:
+                            f.write(await response.text())
+                        logger.info(f"Saved raw response as raw_response_attempt_{attempt + 1}.txt")
+                else:
+                    logger.error(f"Attempt {attempt + 1}: API request failed with status: {response.status if response else 'No response'}")
+            except PlaywrightTimeoutError:
+                logger.error(f"Attempt {attempt + 1}: API request timed out.")
+            except Exception as e:
+                logger.error(f"Attempt {attempt + 1}: Error fetching press release data: {e}")
+            if attempt < 2:
+                logger.info("Retrying after 2 seconds...")
+                await asyncio.sleep(2)
 
-                    # Save simplified JSON
-                    simplified_data = simplify_press_release(json_data)
+        if json_data:
+            # Save original JSON
+            try:
+                with open(output_filename, 'w', encoding='utf-8') as f:
+                    json.dump(json_data, f, indent=4, ensure_ascii=False)
+                logger.info(f"Original press release JSON saved as {output_filename}")
+            except Exception as e:
+                logger.error(f"Failed to save original JSON: {e}")
+
+            # Save simplified JSON
+            try:
+                simplified_data = simplify_press_release(json_data)
+                if simplified_data:
                     with open(simplified_filename, 'w', encoding='utf-8') as f:
                         json.dump(simplified_data, f, indent=4, ensure_ascii=False)
-                    print(f"✅ Simplified press release JSON saved as {simplified_filename}")
+                    logger.info(f"Simplified press release JSON saved as {simplified_filename}")
+                else:
+                    logger.warning("No simplified data generated.")
+            except Exception as e:
+                logger.error(f"Failed to save simplified JSON: {e}")
 
-                    # Generate text summary
-                    with open(summary_filename, 'w', encoding='utf-8') as f:
-                        f.write(f"Press Release Summary ({from_date} to {to_date})\n")
-                        f.write("=" * 50 + "\n\n")
-                        for item in simplified_data:
-                            f.write(f"Title: {item['title']}\n")
-                            f.write(f"Date: {item['date']}\n")
-                            f.write(f"Category: {item['category']}\n")
-                            f.write(f"Body: {item['body']}\n")
-                            f.write(f"Attachment: {item['attachment_url']}\n")
-                            f.write("-" * 50 + "\n\n")
-                    print(f"✅ Text summary saved as {summary_filename}")
-
-                except ValueError:
-                    print("❌ Failed to parse JSON response. Response may not be valid JSON.")
-                    # Save raw response for debugging
-                    with open("raw_response.txt", "w", encoding='utf-8') as f:
-                        f.write(await response.text())
-                    print("Saved raw response as raw_response.txt for debugging.")
-            else:
-                print(f"❌ API request failed with status: {response.status if response else 'No response'}")
-        except PlaywrightTimeoutError:
-            print("❌ API request timed out.")
-        except Exception as e:
-            print(f"❌ Error fetching press release data: {e}")
+            # Generate text summary
+            try:
+                with open(summary_filename, 'w', encoding='utf-8') as f:
+                    f.write(f"Press Release Summary ({from_date} to {to_date})\n")
+                    f.write("=" * 50 + "\n\n")
+                    for item in simplified_data:
+                        f.write(f"Title: {item['title']}\n")
+                        f.write(f"Date: {item['date']}\n")
+                        f.write(f"Category: {item['category']}\n")
+                        f.write(f"Body: {item['body']}\n")
+                        f.write(f"Attachment: {item['attachment_url']}\n")
+                        f.write("-" * 50 + "\n\n")
+                logger.info(f"Text summary saved as {summary_filename}")
+            except Exception as e:
+                logger.error(f"Failed to save text summary: {e}")
+        else:
+            logger.error("Failed to fetch valid JSON after all retries.")
 
         # Close the browser
-        await browser.close()
+        try:
+            await browser.close()
+            logger.info("Browser closed successfully.")
+        except Exception as e:
+            logger.error(f"Failed to close browser: {e}")
 
 if __name__ == "__main__":
     asyncio.run(download_press_release())
