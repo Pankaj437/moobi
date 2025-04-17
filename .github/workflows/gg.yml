@@ -75,7 +75,7 @@ jobs:
       continue-on-error: true      
 
     - name: Send Consolidated Email
-      run: python annnouncement.py
+      run: python announcement.py
       continue-on-error: true
 
     - name: Send Consolidated Email
