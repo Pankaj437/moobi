@@ -73,7 +73,7 @@ async def download_press_release():
             print("⚠️ Homepage load timeout—continuing anyway...")
 
         # Construct the press release API URL
-        api_url = f"https://www.nseindia.com/api/press-release?fromDate={from_date}&toDate={to_date}"
+        api_url = f"https://www.nseindia.com/api/press-release?csv=true&fromDate={from_date}&toDate={to_date}"
         print(f"Fetching press release data from: {api_url}")
 
         # Make the API request
