@@ -1,8 +1,9 @@
 import asyncio
+import json
 import smtplib
 import os
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
 from bs4 import BeautifulSoup
 from email.mime.multipart import MIMEMultipart
@@ -14,47 +15,63 @@ from email import encoders
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-def filter_bse_notices(html_content, today):
-    """Filter relevant fields from BSE notices HTML."""
+def parse_notices(html_content):
+    """Parse BSE notices from HTML content."""
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
+        table = soup.find('table', {'id': 'ContentPlaceHolder1_GridView2'})
+        if not table:
+            logger.error("Notices table not found in HTML.")
+            return []
+
         notices = []
-        # Example: Adjust selectors based on BSE website structure
-        notice_rows = soup.select('table#tblBseData tr')
-        for row in notice_rows[1:]:  # Skip header
-            cols = row.select('td')
-            if len(cols) >= 4:
-                date_str = cols[1].text.strip()
-                try:
-                    notice_date = datetime.strptime(date_str, '%d/%m/%Y')
-                    if notice_date.date() == today.date():
-                        notices.append({
-                            'company': cols[0].text.strip(),
-                            'noticeType': cols[2].text.strip(),
-                            'date': date_str,
-                            'description': cols[3].text.strip(),
-                            'link': cols[3].find('a')['href'] if cols[3].find('a') else ''
-                        })
-                except ValueError:
-                    continue
-        logger.info(f"Filtered {len(notices)} BSE notice entries.")
+        rows = table.find_all('tr')[1:]  # Skip header row
+        for row in rows:
+            if 'pgr' in row.get('class', []):  # Skip pagination row
+                continue
+            cols = row.find_all('td')
+            if len(cols) >= 6:
+                notice_no = cols[0].text.strip()
+                subject_link = cols[1].find('a')
+                subject = subject_link.text.strip() if subject_link else ''
+                subject_url = subject_link['href'] if subject_link else ''
+                if subject_url and not subject_url.startswith('http'):
+                    subject_url = f"https://www.bseindia.com{subject_url}"
+                segment = cols[2].text.strip()
+                category = cols[3].text.strip()
+                department = cols[4].text.strip()
+                pdf_input = cols[5].find('input', {'type': 'image'})
+                pdf_id = pdf_input['id'] if pdf_input else ''
+                
+                notices.append({
+                    'noticeNo': notice_no,
+                    'subject': subject,
+                    'subjectUrl': subject_url,
+                    'segment': segment,
+                    'category': category,
+                    'department': department,
+                    'pdfId': pdf_id
+                })
+        logger.info(f"Parsed {len(notices)} notices.")
         return notices
     except Exception as e:
-        logger.error(f"Failed to filter BSE notices: {e}")
+        logger.error(f"Failed to parse notices: {e}")
         return []
 
-def save_text_summary(data, today, filename):
-    """Save filtered BSE notices as a human-readable text file."""
+def save_text_summary(data, from_date, to_date, filename):
+    """Save filtered notices as a human-readable text file."""
     try:
         with open(filename, 'w', encoding='utf-8') as f:
-            f.write(f"BSE Notices Summary ({today.strftime('%d-%m-%Y')})\n")
+            f.write(f"BSE Notices Summary ({from_date} to {to_date})\n")
             f.write("=" * 60 + "\n\n")
             for item in data:
-                f.write(f"Company: {item['company']}\n")
-                f.write(f"Notice Type: {item['noticeType']}\n")
-                f.write(f"Date: {item['date']}\n")
-                f.write(f"Description: {item['description']}\n")
-                f.write(f"Link: {item['link']}\n")
+                f.write(f"Notice No: {item['noticeNo']}\n")
+                f.write(f"Subject: {item['subject']}\n")
+                f.write(f"Subject URL: {item['subjectUrl']}\n")
+                f.write(f"Segment: {item['segment']}\n")
+                f.write(f"Category: {item['category']}\n")
+                f.write(f"Department: {item['department']}\n")
+                f.write(f"PDF ID: {item['pdfId']}\n")
                 f.write("=" * 60 + "\n\n")
         logger.info(f"Text summary saved as {filename}")
     except Exception as e:
@@ -62,10 +79,13 @@ def save_text_summary(data, today, filename):
 
 async def fetch_bse_notices():
     today = datetime.today()
+    from_date = today.strftime("%d-%m-%Y")
+    to_date = today.strftime("%d-%m-%Y")
     date_str = today.strftime("%Y-%m-%d")
-    summary_filename = f"bse_notices_{today.strftime('%d-%m-%Y')}_summary.txt"
+    output_filename = f"bse_notices_{to_date}.json"
+    summary_filename = f"bse_notices_{to_date}_summary.txt"
 
-    logger.info(f"Starting BSE notices download for {today.strftime('%d-%m-%Y')}")
+    logger.info(f"Starting BSE notices download for {from_date} to {to_date}")
 
     async with async_playwright() as p:
         try:
@@ -78,6 +98,10 @@ async def fetch_bse_notices():
         try:
             context = await browser.new_context(
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+                extra_http_headers={
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+                    "Referer": "https://www.bseindia.com/"
+                },
                 viewport={"width": 1920, "height": 1080},
                 ignore_https_errors=True,
                 java_script_enabled=True
@@ -89,23 +113,75 @@ async def fetch_bse_notices():
             await browser.close()
             return None, None
 
-        try:
-            await page.goto("https://www.bseindia.com/markets/MarketInfo/NoticesCirculars.aspx", timeout=60000)
-            await page.wait_for_load_state("networkidle", timeout=60000)
-            logger.info("BSE notices page loaded.")
-            html_content = await page.content()
-        except PlaywrightTimeoutError:
-            logger.error("BSE notices page load timeout.")
-            await browser.close()
-            return None, None
-        except Exception as e:
-            logger.error(f"Error fetching BSE notices page: {e}")
-            await browser.close()
-            return None, None
+        url = "https://www.bseindia.com/markets/MarketInfo/NoticesCirculars.aspx?id=2"
+        logger.info(f"Fetching BSE notices from: {url}")
 
-        filtered_data = filter_bse_notices(html_content, today)
-        if filtered_data:
-            save_text_summary(filtered_data, today, summary_filename)
+        # Set form data for single-day query
+        form_data = {
+            "ctl00$ContentPlaceHolder1$txtDate": from_date,
+            "ctl00$ContentPlaceHolder1$txtTodate": to_date,
+            "ctl00$ContentPlaceHolder1$txtNoticeNo": "",
+            "ctl00$ContentPlaceHolder1$ddlSegment": "All",
+            "ctl00$ContentPlaceHolder1$ddlCategory": "All",
+            "ctl00$ContentPlaceHolder1$ddlDep": "All",
+            "ctl00$ContentPlaceHolder1$SmartSearch$smartSearch": "",
+            "ctl00$ContentPlaceHolder1$txtSub": "",
+            "ctl00$ContentPlaceHolder1$txtfreeText": "",
+            "ctl00$ContentPlaceHolder1$btnSubmit": "Submit"
+        }
+
+        notices_data = []
+        html_content = None
+        for attempt in range(3):
+            try:
+                # Navigate to page and wait for load
+                await page.goto(url, timeout=30000)
+                await page.wait_for_load_state("networkidle", timeout=30000)
+                logger.info("BSE notices page loaded.")
+
+                # Fill and submit the form
+                await page.fill("#ContentPlaceHolder1_txtDate", from_date)
+                await page.fill("#ContentPlaceHolder1_txtTodate", to_date)
+                await page.select_option("#ContentPlaceHolder1_ddlSegment", "All")
+                await page.select_option("#ContentPlaceHolder1_ddlCategory", "All")
+                await page.select_option("#ContentPlaceHolder1_ddlDep", "All")
+                await page.click("#ContentPlaceHolder1_btnSubmit")
+                await page.wait_for_load_state("networkidle", timeout=30000)
+                logger.info("Form submitted and results loaded.")
+
+                # Get page content
+                html_content = await page.content()
+                notices_data = parse_notices(html_content)
+                if notices_data:
+                    logger.info(f"Attempt {attempt + 1}: Successfully parsed {len(notices_data)} notices.")
+                    break
+                else:
+                    logger.warning(f"Attempt {attempt + 1}: No notices parsed.")
+            except PlaywrightTimeoutError:
+                logger.error(f"Attempt {attempt + 1}: Page load or form submission timed out.")
+            except Exception as e:
+                logger.error(f"Attempt {attempt + 1}: Error fetching notices: {e}")
+            if attempt < 2:
+                logger.info("Retrying after 2 seconds...")
+                await asyncio.sleep(2)
+
+        if notices_data:
+            try:
+                with open(output_filename, 'w', encoding='utf-8') as f:
+                    json.dump(notices_data, f, indent=4, ensure_ascii=False)
+                logger.info(f"Notices JSON saved as {output_filename}")
+            except Exception as e:
+                logger.error(f"Failed to save JSON: {e}")
+
+            save_text_summary(notices_data, from_date, to_date, summary_filename)
+
+        if html_content and not notices_data:
+            try:
+                with open(f"bse_notices_raw_{to_date}.html", 'w', encoding='utf-8') as f:
+                    f.write(html_content)
+                logger.info(f"Saved raw HTML as bse_notices_raw_{to_date}.html for debugging.")
+            except Exception as e:
+                logger.error(f"Failed to save raw HTML: {e}")
 
         try:
             await browser.close()
@@ -113,7 +189,7 @@ async def fetch_bse_notices():
         except Exception as e:
             logger.error(f"Failed to close browser: {e}")
 
-        return filtered_data, summary_filename
+        return notices_data, summary_filename
 
 def send_email(summary_filename, date_str):
     """Send email with the BSE notices text summary attached."""
@@ -172,8 +248,8 @@ Automated Data Service
         logger.error(f"Email sending failed: {e}")
 
 async def main():
-    filtered_data, summary_filename = await fetch_bse_notices()
-    if filtered_data and summary_filename:
+    notices_data, summary_filename = await fetch_bse_notices()
+    if notices_data and summary_filename:
         date_str = datetime.today().strftime("%Y-%m-%d")
         send_email(summary_filename, date_str)
 
