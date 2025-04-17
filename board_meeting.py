@@ -67,7 +67,7 @@ def save_text_summary(data, from_date, to_date, filename):
 async def fetch_board_meetings():
     today = datetime.today()
     one_day_ago = today - timedelta(days=1)
-    from_date = one_day_ago.strftime("%d-%m-%Y")
+    from_date = today.strftime("%d-%m-%Y")
     to_date = today.strftime("%d-%m-%Y")
     date_str = today.strftime("%Y-%m-%d")
     output_filename = f"board_meetings_{to_date}.json"
