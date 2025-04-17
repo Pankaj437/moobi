@@ -103,7 +103,7 @@ async def fetch_board_meetings():
 
         # Navigate to board meetings page to set cookies
         try:
-            await page.goto("https://www.nseindia.com/companies-listing/corporate-filings-board-meetings", timeout=30000)
+            await page.goto("https://www.nseindia.com", timeout=30000)
             await page.wait_for_load_state("networkidle", timeout=30000)
             logger.info("NSE board meetings page loaded, cookies set")
         except PlaywrightTimeoutError:
