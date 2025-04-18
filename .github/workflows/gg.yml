@@ -2,7 +2,7 @@ name: Fetch NSE Play
 
 on:
   schedule:
-   - cron: "30 13 * * *" # Every 5 hours
+   - cron: "30 10 * * *" # Every 5 hours
   workflow_dispatch:
 
 jobs:
