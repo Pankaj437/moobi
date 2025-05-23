@@ -27,8 +27,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        pip install playwright beautifulsoup4
-        playwright install --with-deps firefox
+        pip install requests
 
     - name: Run IPO Data Fetcher
       run: python rsi_sender.py
