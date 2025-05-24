@@ -33,3 +33,7 @@ jobs:
       run: python rsi_sender.py
       continue-on-error: true
 
+    - name: Run IPO Data Fetcher
+      run: python rsi_high.py
+      continue-on-error: true
+
