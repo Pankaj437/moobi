@@ -86,7 +86,7 @@ def stocks_to_csv(stocks_data):
             stock.get("s", ""),  # Symbol
             stock.get("d", [])[1] if len(stock.get("d", [])) > 1 else "",  # Company Name
             stock.get("d", [])[6] if len(stock.get("d", [])) > 6 else "",  # Close
-            "Below 30",  # RSI placeholder
+            "higher 80",  # RSI placeholder
             stock.get("d", [])[21] if len(stock.get("d", [])) > 21 else "",  # Sector
             stock.get("d", [])[15] if len(stock.get("d", [])) > 15 else "",  # Market Cap
             stock.get("d", [])[11] if len(stock.get("d", [])) > 11 else "",  # Currency
