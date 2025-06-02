@@ -43,7 +43,7 @@ def scan_stocks():
     }
     payload = {
         "columns": ["name", "description", "logoid", "update_mode", "type", "typespecs", "close", "pricescale", "minmov", "fractional", "minmove2", "currency", "change", "volume", "relative_volume_10d_calc", "market_cap_basic", "fundamental_currency_code", "price_earnings_ttm", "earnings_per_share_diluted_ttm", "earnings_per_share_diluted_yoy_growth_ttm", "dividends_yield_current", "sector.tr", "market", "sector", "recommendation_mark", "exchange"],
-        "filter": [{"left": "is_blacklisted", "operation": "equal", "right": False}, {"left": "RSI", "operation": "greater", "right": 70}],
+        "filter": [{"left": "is_blacklisted", "operation": "equal", "right": False}, {"left": "RSI", "operation": "greater", "right": 82}],
         "ignore_unknown_fields": False,
         "options": {"lang": "en"},
         "range": [0, 100],
@@ -106,7 +106,7 @@ def send_email(csv_content, stock_count, error_message=None):
     date_str = datetime.now().strftime("%Y-%m-%d")
     
     if error_message:
-        msg['Subject'] = f"Low RSI Stocks Report - Error - {date_str}"
+        msg['Subject'] = f"high RSI Stocks Report - Error - {date_str}"
         body = f"""Dear Recipient,
 
 Failed to scan stocks for RSI < 30 on {date_str}.
@@ -119,7 +119,7 @@ Automated Data Service
 """
         msg.attach(MIMEText(body, 'plain'))
     else:
-        msg['Subject'] = f"Low RSI Stocks Report - {date_str}"
+        msg['Subject'] = f"high RSI Stocks Report - {date_str}"
         body = f"""Dear Recipient,
 
 Attached is the CSV file containing {stock_count} stocks with RSI < 30 for {date_str}.
@@ -156,7 +156,7 @@ def main():
             send_email(csv_content, len(stocks))
         else:
             logger.info("No stocks found with RSI < 30")
-            send_email(None, 0, "No stocks with RSI < 30 found")
+            send_email(None, 0, "No stocks with RSI < 82 found")
     else:
         error_message = "Scan failed or returned no data"
         logger.error(error_message)
